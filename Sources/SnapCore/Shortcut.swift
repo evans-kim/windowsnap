@@ -13,6 +13,7 @@ public struct Shortcut: Codable, Equatable, Hashable {
     public static let keys: [(code: UInt32, label: String)] = {
         let entries: [(Int, String)] = [
             (kVK_LeftArrow, "←"), (kVK_RightArrow, "→"), (kVK_UpArrow, "↑"), (kVK_DownArrow, "↓"),
+            (kVK_Return, "↩"),
             (kVK_ANSI_A, "A"), (kVK_ANSI_B, "B"), (kVK_ANSI_C, "C"), (kVK_ANSI_D, "D"),
             (kVK_ANSI_E, "E"), (kVK_ANSI_F, "F"), (kVK_ANSI_G, "G"), (kVK_ANSI_H, "H"),
             (kVK_ANSI_I, "I"), (kVK_ANSI_J, "J"), (kVK_ANSI_K, "K"), (kVK_ANSI_L, "L"),
@@ -37,11 +38,21 @@ public struct Shortcut: Codable, Equatable, Hashable {
 }
 
 public struct ShortcutConfiguration: Codable, Equatable {
+    public static let maximizeID: UInt32 = 5
     public var bindings: [UInt32: Shortcut]
 
     public init(bindings: [UInt32: Shortcut]) { self.bindings = bindings }
 
     public static var defaults: Self {
+        let keys: [(Direction, Int)] = [(.left, kVK_LeftArrow), (.right, kVK_RightArrow), (.up, kVK_UpArrow), (.down, kVK_DownArrow)]
+        var bindings = Dictionary(uniqueKeysWithValues: keys.map {
+            ($0.0.rawValue, Shortcut(keyCode: UInt32($0.1), modifiers: UInt32(controlKey | optionKey)))
+        })
+        bindings[maximizeID] = Shortcut(keyCode: UInt32(kVK_Return), modifiers: UInt32(controlKey | optionKey))
+        return Self(bindings: bindings)
+    }
+
+    private static var legacyDefaults: Self {
         let keys: [(Direction, Int)] = [(.left, kVK_LeftArrow), (.right, kVK_RightArrow), (.up, kVK_UpArrow), (.down, kVK_DownArrow)]
         return Self(bindings: Dictionary(uniqueKeysWithValues: keys.map {
             ($0.0.rawValue, Shortcut(keyCode: UInt32($0.1), modifiers: UInt32(optionKey | cmdKey)))
@@ -49,9 +60,10 @@ public struct ShortcutConfiguration: Codable, Equatable {
     }
 
     public var validationError: String? {
-        guard bindings.count == Direction.allCases.count,
-              Direction.allCases.allSatisfy({ bindings[$0.rawValue] != nil }) else {
-            return "네 방향의 단축키를 모두 지정해 주세요."
+        guard bindings.count == Direction.allCases.count + 1,
+              Direction.allCases.allSatisfy({ bindings[$0.rawValue] != nil }),
+              bindings[Self.maximizeID] != nil else {
+            return "네 방향과 최대화 단축키를 모두 지정해 주세요."
         }
         let allowed = UInt32(cmdKey | optionKey | controlKey | shiftKey)
         for shortcut in bindings.values {
@@ -69,8 +81,12 @@ public struct ShortcutConfiguration: Codable, Equatable {
 
     public static func load(from defaults: UserDefaults = .standard) -> Self {
         guard let data = defaults.data(forKey: "shortcuts.v1"),
-              let decoded = try? JSONDecoder().decode(Self.self, from: data),
-              decoded.validationError == nil else { return .defaults }
+              var decoded = try? JSONDecoder().decode(Self.self, from: data) else { return .defaults }
+        if decoded == legacyDefaults { return .defaults }
+        if decoded.bindings[maximizeID] == nil {
+            decoded.bindings[maximizeID] = Self.defaults.bindings[maximizeID]
+        }
+        guard decoded.validationError == nil else { return .defaults }
         return decoded
     }
 

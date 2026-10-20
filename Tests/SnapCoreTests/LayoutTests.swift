@@ -3,21 +3,27 @@ import CoreGraphics
 @testable import SnapCore
 
 final class LayoutTests: XCTestCase {
-    func testHorizontalThenUpMaximizesOnlySameWindowWithinInterval() {
-        for horizontal in [Direction.left, .right] {
-            var sequence = PressSequence()
-            sequence.record(direction: horizontal, now: 10)
-            XCTAssertTrue(sequence.maximizes(direction: .up, sameWindow: true, now: 10.5))
-            XCTAssertFalse(sequence.maximizes(direction: .up, sameWindow: false, now: 10.5))
-            XCTAssertFalse(sequence.maximizes(direction: .up, sameWindow: true, now: 10.81))
-            XCTAssertFalse(sequence.maximizes(direction: .down, sameWindow: true, now: 10.5))
-            XCTAssertFalse(sequence.maximizes(direction: .up, sameWindow: true, now: 9))
-            XCTAssertTrue(sequence.usesThirds(direction: horizontal, sameWindow: true, now: 10.5))
-            sequence.record(direction: .up, now: 10.5)
-            XCTAssertFalse(sequence.maximizes(direction: .up, sameWindow: true, now: 10.7))
-            sequence.reset()
-            XCTAssertFalse(sequence.maximizes(direction: .up, sameWindow: true, now: 10.7))
+    func testPerpendicularDirectionsSelectCornerOnlyForSameWindowWithinInterval() {
+        let pairs: [(Direction, Direction, Corner)] = [
+            (.up, .left, .upperLeft), (.up, .right, .upperRight),
+            (.down, .right, .lowerRight), (.down, .left, .lowerLeft)
+        ]
+        for (first, second, expected) in pairs {
+            for (start, end) in [(first, second), (second, first)] {
+                var sequence = PressSequence()
+                sequence.record(direction: start, now: 10)
+                XCTAssertEqual(sequence.corner(direction: end, sameWindow: true, now: 10.5), expected)
+                XCTAssertNil(sequence.corner(direction: end, sameWindow: false, now: 10.5))
+                XCTAssertNil(sequence.corner(direction: end, sameWindow: true, now: 10.81))
+                XCTAssertNil(sequence.corner(direction: end, sameWindow: true, now: 9))
+                XCTAssertNil(sequence.corner(direction: start, sameWindow: true, now: 10.5))
+                sequence.reset()
+                XCTAssertNil(sequence.corner(direction: end, sameWindow: true, now: 10.5))
+            }
         }
+        var sequence = PressSequence()
+        sequence.record(direction: .left, now: 10)
+        XCTAssertNil(sequence.corner(direction: .right, sameWindow: true, now: 10.5))
     }
 
     func testDirectionalHalvesAndThirds() {
@@ -29,6 +35,14 @@ final class LayoutTests: XCTestCase {
             XCTAssertEqual(Layout.frame(in: screen, direction: .up, thirds: thirds), CGRect(x: -1440, y: 25, width: 1440, height: 900 / divisor))
             XCTAssertEqual(Layout.frame(in: screen, direction: .down, thirds: thirds), CGRect(x: -1440, y: 925 - 900 / divisor, width: 1440, height: 900 / divisor))
         }
+    }
+
+    func testFourCornersUseVisibleScreenBounds() {
+        let screen = CGRect(x: -1440, y: 25, width: 1440, height: 900)
+        XCTAssertEqual(Layout.frame(in: screen, corner: .upperLeft), CGRect(x: -1440, y: 25, width: 720, height: 450))
+        XCTAssertEqual(Layout.frame(in: screen, corner: .upperRight), CGRect(x: -720, y: 25, width: 720, height: 450))
+        XCTAssertEqual(Layout.frame(in: screen, corner: .lowerRight), CGRect(x: -720, y: 475, width: 720, height: 450))
+        XCTAssertEqual(Layout.frame(in: screen, corner: .lowerLeft), CGRect(x: -1440, y: 475, width: 720, height: 450))
     }
 
     func testScreenCoordinatesIncludeVerticalAndNegativeDisplays() {

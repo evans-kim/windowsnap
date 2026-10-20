@@ -5,7 +5,8 @@ const layouts = {
   'left-half': ['←', '한 번으로, 딱 절반.'],
   'left-third': ['← × 2', '0.8초 안에 한 번 더, 1/3.'],
   'right-half': ['→', '오른쪽으로, 딱 절반.'],
-  'maximize': ['← 다음 ↑', '0.8초 안에 이어서, 넓게.']
+  'lower-right': ['↓ 다음 →', '직각 방향을 이어서, 우하단 1/4.'],
+  'maximize': ['Return', '한 번에 넓게, 최대화.']
 };
 document.querySelectorAll('[data-layout][type="button"]').forEach(button => {
   button.addEventListener('click', () => {
@@ -15,7 +16,7 @@ document.querySelectorAll('[data-layout][type="button"]').forEach(button => {
       item.setAttribute('aria-pressed', String(item === button));
     });
     caption.replaceChildren();
-    ['⌥', '⌘', layouts[layout][0]].forEach((key, index) => {
+    ['⌃', '⌥', layouts[layout][0]].forEach((key, index) => {
       if (index) caption.append(' + ');
       const element = document.createElement('kbd');
       element.textContent = key;

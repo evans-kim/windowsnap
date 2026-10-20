@@ -5,6 +5,20 @@ public enum Direction: UInt32, CaseIterable {
     case left = 1, right, up, down
 }
 
+public enum Corner: Equatable {
+    case upperLeft, upperRight, lowerRight, lowerLeft
+
+    public init?(first: Direction, second: Direction) {
+        switch (first, second) {
+        case (.up, .left), (.left, .up): self = .upperLeft
+        case (.up, .right), (.right, .up): self = .upperRight
+        case (.down, .right), (.right, .down): self = .lowerRight
+        case (.down, .left), (.left, .down): self = .lowerLeft
+        default: return nil
+        }
+    }
+}
+
 public enum Layout {
     // All geometry here uses Accessibility's global top-left coordinates.
     public static func frame(in screen: CGRect, direction: Direction, thirds: Bool) -> CGRect {
@@ -21,6 +35,14 @@ public enum Layout {
             let height = screen.height / divisor
             return CGRect(x: screen.minX, y: screen.maxY - height, width: screen.width, height: height)
         }
+    }
+
+    public static func frame(in screen: CGRect, corner: Corner) -> CGRect {
+        let width = screen.width / 2
+        let height = screen.height / 2
+        let x: CGFloat = corner == .upperRight || corner == .lowerRight ? screen.maxX - width : screen.minX
+        let y: CGFloat = corner == .lowerLeft || corner == .lowerRight ? screen.maxY - height : screen.minY
+        return CGRect(x: x, y: y, width: width, height: height)
     }
 
     public static func accessibilityFrame(_ frame: CGRect, primaryHeight: CGFloat) -> CGRect {
@@ -56,9 +78,10 @@ public struct PressSequence {
         sameWindow && self.direction == direction && now >= timestamp && now - timestamp <= Self.interval
     }
 
-    public func maximizes(direction: Direction, sameWindow: Bool, now: TimeInterval) -> Bool {
-        sameWindow && direction == .up && (self.direction == .left || self.direction == .right)
-            && now >= timestamp && now - timestamp <= Self.interval
+    public func corner(direction: Direction, sameWindow: Bool, now: TimeInterval) -> Corner? {
+        guard sameWindow, let previous = self.direction,
+              now >= timestamp, now - timestamp <= Self.interval else { return nil }
+        return Corner(first: previous, second: direction)
     }
 
     public mutating func record(direction: Direction, now: TimeInterval) {

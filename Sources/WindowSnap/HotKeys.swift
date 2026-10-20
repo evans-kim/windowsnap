@@ -3,6 +3,7 @@ import SnapCore
 
 final class HotKeys {
     var onPress: ((Direction) -> Void)?
+    var onMaximize: (() -> Void)?
     private var handler: EventHandlerRef?
     private var references: [EventHotKeyRef] = []
     private var held: Set<UInt32> = []
@@ -22,8 +23,12 @@ final class HotKeys {
             let owner = Unmanaged<HotKeys>.fromOpaque(context).takeUnretainedValue()
             if GetEventKind(event) == UInt32(kEventHotKeyReleased) {
                 owner.held.remove(identifier.id)
-            } else if owner.held.insert(identifier.id).inserted, let direction = Direction(rawValue: identifier.id) {
-                owner.onPress?(direction)
+            } else if owner.held.insert(identifier.id).inserted {
+                if identifier.id == ShortcutConfiguration.maximizeID {
+                    owner.onMaximize?()
+                } else if let direction = Direction(rawValue: identifier.id) {
+                    owner.onPress?(direction)
+                }
             }
             return noErr
         }, types.count, &types, Unmanaged.passUnretained(self).toOpaque(), &handler)
@@ -38,6 +43,13 @@ final class HotKeys {
             }
             references.append(reference)
         }
+        guard let shortcut = configuration.bindings[ShortcutConfiguration.maximizeID] else { stop(); return false }
+        var reference: EventHotKeyRef?
+        let result = RegisterEventHotKey(shortcut.keyCode, shortcut.modifiers,
+                                         EventHotKeyID(signature: 0x57534E50, id: ShortcutConfiguration.maximizeID),
+                                         GetApplicationEventTarget(), 0, &reference)
+        guard result == noErr, let reference else { stop(); return false }
+        references.append(reference)
         return true
     }
 

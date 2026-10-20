@@ -57,25 +57,15 @@ struct SettingsView: View {
                     Text("자동 실행 변경은 즉시 적용됩니다.").font(.caption).foregroundStyle(.secondary)
                 }.frame(maxWidth: .infinity, alignment: .leading).padding(6)
             }
-            Text("방향별 단축키").font(.headline)
-            Text("같은 단축키를 0.8초 안에 다시 누르면 1/3, 좌우 배치 후 위쪽을 누르면 최대화합니다.")
+            Text("창 배치 단축키").font(.headline)
+            Text("같은 방향을 0.8초 안에 다시 누르면 1/3, 직각 방향을 이어 누르면 모서리 1/4로 배치합니다.")
                 .font(.callout).foregroundStyle(.secondary)
             ForEach(Direction.allCases, id: \.rawValue) { direction in
-                HStack(spacing: 12) {
-                    Text(direction.title).frame(width: 50, alignment: .leading)
-                    modifier("⌃", flag: controlKey, direction: direction)
-                    modifier("⌥", flag: optionKey, direction: direction)
-                    modifier("⇧", flag: shiftKey, direction: direction)
-                    modifier("⌘", flag: cmdKey, direction: direction)
-                    Picker("키", selection: Binding(
-                        get: { model.draft.bindings[direction.rawValue]!.keyCode },
-                        set: { model.draft.bindings[direction.rawValue]!.keyCode = $0 }
-                    )) {
-                        ForEach(Shortcut.keys, id: \.code) { key in Text(key.label).tag(key.code) }
-                    }.labelsHidden().frame(width: 90)
-                    Text(model.draft.bindings[direction.rawValue]!.label).font(.system(.body, design: .monospaced))
-                }
+                shortcutRow(id: direction.rawValue, title: direction.title)
             }
+            shortcutRow(id: ShortcutConfiguration.maximizeID, title: "최대화")
+            Text("최대화는 Dock과 메뉴 막대를 제외한 화면을 채우며 별도 전체 화면 Space로 이동하지 않습니다.")
+                .font(.caption).foregroundStyle(.secondary)
             Text("문자 키는 영문 키보드의 물리적 위치 기준입니다. ⌘, ⌥, ⌃ 중 하나 이상을 포함하세요.")
                 .font(.caption).foregroundStyle(.secondary)
             if let error = model.draft.validationError { Text(error).font(.callout).foregroundStyle(.red) }
@@ -94,14 +84,31 @@ struct SettingsView: View {
         .onChange(of: model.draft) { _ in model.message = "" }
     }
 
-    private func modifier(_ title: String, flag: Int, direction: Direction) -> some View {
+    private func shortcutRow(id: UInt32, title: String) -> some View {
+        HStack(spacing: 12) {
+            Text(title).frame(width: 50, alignment: .leading)
+            modifier("⌃", flag: controlKey, id: id)
+            modifier("⌥", flag: optionKey, id: id)
+            modifier("⇧", flag: shiftKey, id: id)
+            modifier("⌘", flag: cmdKey, id: id)
+            Picker("키", selection: Binding(
+                get: { model.draft.bindings[id]!.keyCode },
+                set: { model.draft.bindings[id]!.keyCode = $0 }
+            )) {
+                ForEach(Shortcut.keys, id: \.code) { key in Text(key.label).tag(key.code) }
+            }.labelsHidden().frame(width: 90)
+            Text(model.draft.bindings[id]!.label).font(.system(.body, design: .monospaced))
+        }
+    }
+
+    private func modifier(_ title: String, flag: Int, id: UInt32) -> some View {
         Toggle(title, isOn: Binding(
-            get: { model.draft.bindings[direction.rawValue]!.modifiers & UInt32(flag) != 0 },
+            get: { model.draft.bindings[id]!.modifiers & UInt32(flag) != 0 },
             set: { selected in
-                if selected { model.draft.bindings[direction.rawValue]!.modifiers |= UInt32(flag) }
-                else { model.draft.bindings[direction.rawValue]!.modifiers &= ~UInt32(flag) }
+                if selected { model.draft.bindings[id]!.modifiers |= UInt32(flag) }
+                else { model.draft.bindings[id]!.modifiers &= ~UInt32(flag) }
             }
-        )).toggleStyle(.checkbox).help("\(direction.title) \(title) 보조키")
+        )).toggleStyle(.checkbox).help("\(id == ShortcutConfiguration.maximizeID ? "최대화" : Direction(rawValue: id)!.title) \(title) 보조키")
     }
 }
 

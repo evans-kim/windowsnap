@@ -32,9 +32,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             shortcutItems[direction.rawValue] = item
             menu.addItem(item)
         }
+        let maximizeItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+        shortcutItems[ShortcutConfiguration.maximizeID] = maximizeItem
+        menu.addItem(maximizeItem)
         refreshShortcutLabels()
         menu.addItem(NSMenuItem(title: "같은 단축키를 0.8초 안에 다시 누르면 1/3", action: nil, keyEquivalent: ""))
-        menu.addItem(NSMenuItem(title: "좌우 배치 후 0.8초 안에 위쪽 → 최대화", action: nil, keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "직각 방향을 0.8초 안에 이어 누르면 해당 모서리 1/4", action: nil, keyEquivalent: ""))
         menu.addItem(.separator())
         add("설정…", action: #selector(showSettings), to: menu)
         add("손쉬운 사용 권한 설정…", action: #selector(openPermissions), to: menu)
@@ -47,6 +50,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         hotKeys.onPress = { [weak self] direction in
             guard let self else { return }
             let message = self.mover.snap(direction)
+            self.resultItem.title = message
+            self.statusItem.button?.toolTip = "WindowSnap · \(message)"
+            self.refreshPermissions()
+        }
+        hotKeys.onMaximize = { [weak self] in
+            guard let self else { return }
+            let message = self.mover.maximize()
             self.resultItem.title = message
             self.statusItem.button?.toolTip = "WindowSnap · \(message)"
             self.refreshPermissions()
@@ -83,6 +93,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         for direction in Direction.allCases {
             shortcutItems[direction.rawValue]?.title = "\(configuration.bindings[direction.rawValue]!.label)   \(direction.title) 1/2"
         }
+        shortcutItems[ShortcutConfiguration.maximizeID]?.title = "\(configuration.bindings[ShortcutConfiguration.maximizeID]!.label)   최대화"
     }
 
     private func refreshPauseLabel() {
@@ -136,7 +147,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let alert = NSAlert()
         alert.messageText = "WindowSnap"
         let shortcuts = Direction.allCases.map { "\(configuration.bindings[$0.rawValue]!.label) : \($0.title) 절반" }.joined(separator: "\n")
-        alert.informativeText = "활성 창을 설정한 단축키로 배치합니다.\n\n\(shortcuts)\n같은 단축키를 0.8초 안에 다시 누르면 1/3로 줄어듭니다. 연속 입력 중에는 1/3을 유지합니다.\n\n시스템 설정 → 개인정보 보호 및 보안 → 손쉬운 사용에서 WindowSnap을 허용해 주세요. 허용 후 사용할 앱의 창을 선택하면 바로 작동합니다.\n\n메뉴 막대 → 설정에서 로그인 시 자동 실행과 방향별 단축키를 변경할 수 있습니다."
+        let maximize = configuration.bindings[ShortcutConfiguration.maximizeID]!.label
+        alert.informativeText = "활성 창을 설정한 단축키로 배치합니다.\n\n\(shortcuts)\n\(maximize) : 최대화\n같은 단축키를 0.8초 안에 다시 누르면 1/3로 줄어듭니다. 직각 방향키를 0.8초 안에 이어 누르면 해당 모서리 1/4로 배치합니다.\n\n시스템 설정 → 개인정보 보호 및 보안 → 손쉬운 사용에서 WindowSnap을 허용해 주세요. 허용 후 사용할 앱의 창을 선택하면 바로 작동합니다.\n\n메뉴 막대 → 설정에서 로그인 시 자동 실행과 단축키를 변경할 수 있습니다."
         alert.addButton(withTitle: "확인")
         alert.addButton(withTitle: "권한 설정 열기")
         if alert.runModal() == .alertSecondButtonReturn { openPermissions() }

@@ -3,6 +3,11 @@ import ApplicationServices
 import SnapCore
 
 final class WindowMover {
+    private enum Request {
+        case direction(Direction)
+        case maximize
+    }
+
     private var sequence = PressSequence()
     private var previousWindow: AXUIElement?
 
@@ -11,7 +16,11 @@ final class WindowMover {
         previousWindow = nil
     }
 
-    func snap(_ direction: Direction) -> String {
+    func snap(_ direction: Direction) -> String { place(.direction(direction)) }
+
+    func maximize() -> String { place(.maximize) }
+
+    private func place(_ request: Request) -> String {
         guard AXIsProcessTrusted() else {
             reset()
             return "현재 실행 파일의 권한을 확인할 수 없습니다. WindowSnap 설정에서 확인해 주세요."
@@ -48,9 +57,30 @@ final class WindowMover {
         let visible = Layout.accessibilityFrame(screens[index].visibleFrame, primaryHeight: primary.frame.height)
         let now = ProcessInfo.processInfo.systemUptime
         let sameWindow = previousWindow.map { CFEqual($0, window) } ?? false
-        let thirds = sequence.usesThirds(direction: direction, sameWindow: sameWindow, now: now)
-        let maximizes = sequence.maximizes(direction: direction, sameWindow: sameWindow, now: now)
-        let target = maximizes ? visible : Layout.frame(in: visible, direction: direction, thirds: thirds)
+        let target: CGRect
+        let description: String
+        let anchorRight: Bool
+        let anchorBottom: Bool
+        switch request {
+        case .maximize:
+            target = visible
+            description = "최대화"
+            anchorRight = false
+            anchorBottom = false
+        case .direction(let direction):
+            if let corner = sequence.corner(direction: direction, sameWindow: sameWindow, now: now) {
+                target = Layout.frame(in: visible, corner: corner)
+                description = "1/4"
+                anchorRight = corner == .upperRight || corner == .lowerRight
+                anchorBottom = corner == .lowerLeft || corner == .lowerRight
+            } else {
+                let thirds = sequence.usesThirds(direction: direction, sameWindow: sameWindow, now: now)
+                target = Layout.frame(in: visible, direction: direction, thirds: thirds)
+                description = thirds ? "1/3" : "1/2"
+                anchorRight = direction == .right
+                anchorBottom = direction == .down
+            }
+        }
         // Resize before and after moving: some apps constrain size at the old position.
         _ = setSize(window, target.size)
         let moveResult = setPosition(window, target.origin)
@@ -61,8 +91,8 @@ final class WindowMover {
         }
         // Respect app minimum size but keep the requested edge inside the display.
         var anchored = target.origin
-        if direction == .right { anchored.x = visible.maxX - actual.width }
-        if direction == .down { anchored.y = visible.maxY - actual.height }
+        if anchorRight { anchored.x = visible.maxX - actual.width }
+        if anchorBottom { anchored.y = visible.maxY - actual.height }
         anchored.x = max(visible.minX, anchored.x)
         anchored.y = max(visible.minY, anchored.y)
         guard setPosition(window, anchored) == .success else {
@@ -70,11 +100,14 @@ final class WindowMover {
             return "창의 최종 위치를 변경할 수 없습니다."
         }
         previousWindow = window
-        sequence.record(direction: direction, now: now)
+        switch request {
+        case .direction(let direction): sequence.record(direction: direction, now: now)
+        case .maximize: sequence.reset()
+        }
         if abs(actual.width - target.width) > 2 || abs(actual.height - target.height) > 2 {
             return "앱의 창 크기 제한에 맞춰 배치했습니다."
         }
-        return "\(app.localizedName ?? "창") · \(maximizes ? "최대화" : (thirds ? "1/3" : "1/2")) 배치 완료"
+        return "\(app.localizedName ?? "창") · \(description) 배치 완료"
     }
 
     private func attribute(_ element: AXUIElement, _ name: String) -> CFTypeRef? {
